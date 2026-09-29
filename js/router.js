@@ -32,21 +32,15 @@ function sideBarHTML() {
       '<span class="ni-ico">' + ICONS[r.icon] + '</span>' +
       '<span>' + r.label + '</span></a>';
   }).join("");
-  const adminLink = isDemoAdmin ? (isDemoAdmin() ? adminNavHTML() : "") : "";
   return `
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="#/mapa" data-route="map" style="text-decoration:none">
       <span class="brand-mark">${ICONS.logo}</span>
       <span class="brand-name">AURA</span>
     </a>
-    <nav class="side-nav">${items}${adminLink}</nav>
+    <nav class="side-nav">${items}</nav>
     <div class="side-footer" id="side-footer"></div>
   </aside>`;
-}
-
-function adminNavHTML() {
-  return '<a href="#/admin" class="nav-item side-admin-link" data-route="admin">' +
-    '<span class="ni-ico">' + ICONS.grid + '</span><span>Admin</span></a>';
 }
 
 function headerHTML() {
@@ -56,6 +50,7 @@ function headerHTML() {
     <div class="topbar-title" id="topbar-title"></div>
     <div class="topbar-right">
       <button class="icon-btn" data-action="notifications" aria-label="Notificações">${ICONS.bell}</button>
+      <button class="btn btn-danger btn-sm emergency-trigger" data-action="emergency">Ajuda</button>
     </div>
   </header>`;
 }
@@ -84,6 +79,8 @@ function bindNavEvents() {
   if (ts) ts.addEventListener("click", () => document.body.classList.toggle("sidebar-open"));
   const nt = document.querySelector("[data-action='notifications']");
   if (nt) nt.addEventListener("click", () => openNotificationsModal());
+  const emergency = document.querySelector("[data-action='emergency']");
+  if (emergency) emergency.addEventListener("click", () => openEmergencyModal());
 }
 
 // Gerenciamento de rota (hash)
@@ -94,7 +91,8 @@ function handleHash() {
   else if (hash.startsWith("/relatar")) key = "report";
   else if (hash.startsWith("/meus-relatos")) key = "myreports";
   else if (hash.startsWith("/perfil")) key = "profile";
-  else if (hash.startsWith("/admin")) key = "admin";
+  else if (hash.startsWith("/validacao")) key = "verify";
+  else if (hash.startsWith("/admin")) key = "home";
   else key = "home";
   return key;
 }
@@ -105,10 +103,8 @@ async function navigateTo(key) {
     const u = await DataAccess.getCurrentUser();
     if (!u) { showAuth(); return; }
     appUser = u;
-    if (isDemoAdmin && isDemoAdmin() && key === "admin") { /* ok */ }
-    else if (key === "admin" && !(await DataAccess.isAdmin(u.id))) {
-      toast("Você não tem permissão de administrador.", "error");
-      key = "home";
+    if (key !== "verify" && u.verificationStatus !== "approved") {
+      key = "verify";
     }
   }
 
@@ -118,7 +114,7 @@ async function navigateTo(key) {
     report: renderReportPage,
     myreports: renderMyReports,
     profile: renderProfile,
-    admin: renderAdmin,
+    verify: renderVerificationPage,
     login: showLogin,
     signup: showSignup,
     landing: showLanding
@@ -129,7 +125,7 @@ async function navigateTo(key) {
   currentRoute = key;
   activeView(key);
 
-  if (APP_KEYS.includes(key) || key === "admin") {
+  if (APP_KEYS.includes(key)) {
     setActiveNav(key);
     setTopbarTitle(key);
     const main = document.getElementById("app-main");
@@ -147,7 +143,7 @@ async function navigateTo(key) {
 
 function activeView(key) {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  let v = document.getElementById("view-" + (key === "landing" ? "landing" : key === "login" ? "auth" : key === "signup" ? "auth" : "app"));
+  let v = document.getElementById("view-" + (key === "landing" ? "landing" : key === "login" ? "auth" : key === "signup" ? "auth" : key === "verify" ? "verify" : "app"));
   if (v) v.classList.add("active");
 }
 
@@ -163,7 +159,7 @@ const TOPBAR_TITLES = {
   report: "Relatar situação",
   myreports: "Meus relatos",
   profile: "Meu perfil",
-  admin: "Painel administrativo"
+  verify: "Validação de acesso"
 };
 function setTopbarTitle(key) {
   const el = document.getElementById("topbar-title");
@@ -206,6 +202,3 @@ function emptyStateHTML(iconName, title, msg) {
     '<h3>' + esc(title) + '</h3><p>' + esc(msg || "") + '</p></div>';
 }
 
-function isDemoAdmin() {
-  return !isFirebaseLive();
-}

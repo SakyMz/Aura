@@ -75,26 +75,14 @@ status, createdAt, expiresAt, updatedAt, lat, lng
 - **Privacidade:** sem o token ninguém vê o mapa; o link pode ser encerrado pela
   dona a qualquer momento e expira sozinho ao fim da duração escolhida.
 
-## Validação de acesso (exclusivo para mulheres)
-Para manter a comunidade segura, o AURA libera o app apenas para mulheres
-validadas. O fluxo acontece **após o login/cadastro**, na tela `#/validacao`:
+## Validação manual de acesso
+No cadastro, a usuária envia uma imagem JPG, PNG ou WebP de até 5 MB de um
+documento oficial com foto e rosto visível. A conta permanece pendente e o
+aplicativo de usuárias só libera as rotas depois da aprovação manual. A imagem
+é armazenada em pasta privada, acessível somente à administradora, e removida
+após a decisão. O app não usa reconhecimento facial automatizado.
 
-1. Nome completo (nome e sobrenome).
-2. CPF com verificação do dígito verificador (algoritmo Módulo 11, no cliente).
-3. Autodeclaração: "Declaro que me identifico como mulher...".
-
-O **CPF completo nunca é armazenado**: guardamos apenas a versão mascarada
-(`***.***.**9-99`) e um hash (`cpfHash`) para evitar duplicidade. Enquanto a
-conta não for validada, o `router` bloqueia todas as rotas do app.
-
-No Firebase, o documento da usuária recebe: `gender: "female"`, `verified: true`,
-`documentType: "cpf"`, `cpfMasked`, `cpfHash`, `validatedAt`. As regras do
-Firestore exigem `verified == true` **e** `gender == "female"` para criar relatos
-e compartilhamentos ao vivo (`isVerifiedWoman()`).
-
-> Observação: a checagem do CPF é feita no cliente (dígito verificador).
-> Para produção, recomenda-se também validar nome × CPF em um serviço confiável
-> (ex.: consulta a bureau/Receita) e verificação de e-mail.
+A área administrativa não faz parte do aplicativo público. A administradora revisa as contas manualmente; os campos de permissão são protegidos pelas regras do Firestore.
 
 ## Mapa (OpenStreetMap)
 A integração oficial do mapa é o **OpenStreetMap**, renderizado com **Leaflet**
@@ -131,16 +119,9 @@ localização da usuária e um destino escolhido no mapa. A arquitetura em
 integrar uma API real de rotas (ex.: OSRM/Mapbox Directions) sem mudar a
 interface das telas.
 
-## Ajuda e emergência (após o login)
-Disponível sempre depois de logar, por três caminhos: botão flutuante vermelho
-**Ajuda**, ícone no topo (topbar) e botão na barra de ferramentas do mapa — além
-de Perfil → "Ajuda e emergência". O modal oferece ligação direta para:
-- **190 — Polícia Militar**
-- **180 — Central de Atendimento à Mulher**
-- Atalho para "Compartilhar minha localização ao vivo".
-
-Os contatos ficam em `EMERGENCY_CONTACTS` (`js/constants.js`), fáceis de ajustar.
-
+## Ajuda e emergência
+O botão **Ajuda** mostra contatos telefônicos clicáveis. A administradora configura
+a lista no painel local; 190 e 180 são os contatos padrão.
 ## Camadas do projeto
 
 ```
@@ -163,7 +144,7 @@ js/
     emergency.js                       Botão de ajuda + contatos 190/180
   pages/
     landing.js  auth.js  verify.js  home.js  map-page.js  report.js
-    my-reports.js  profile.js  notifications.js  trusted-share.js  admin.js
+    my-reports.js  profile.js  notifications.js
   router.js                            Navegação + shell
   app.js                               Bootstrap
 backend/
@@ -173,9 +154,9 @@ backend/
 
 ## Segurança e privacidade
 
-- Autenticação via Firebase (usuário comum e admin, diferenciados pelo campo `role`).
-- **Acesso exclusivo para mulheres validadas** (nome completo + CPF + autodeclaração).
-- O CPF completo não é armazenado — apenas versão mascarada e hash.
+- Autenticação via Firebase; as usuárias aguardam aprovação manual antes de acessar o app.
+- O painel administrativo fica fora do site público; as permissões de aprovação são controladas pelas regras do Firestore.
+- A imagem do documento é privada e removida após a análise manual.
 - Regras do Firestore impedem que um usuário comum altere/exclua relatos de outros.
 - Relatos são anônimos por padrão; o `userId` nunca é exibido publicamente.
 - A localização informada em um relato é a do **local do ocorrido**, nunca a posição pessoal da usuária.

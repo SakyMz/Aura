@@ -64,7 +64,11 @@ window.addEventListener("hashchange", async () => {
 
   if (path.startsWith("#/entrar")) { renderAuth(); authRenderLogin(); showAuthView(); return; }
   if (path.startsWith("#/cadastro")) { renderAuth(); authRenderSignup(); showAuthView(); return; }
-  if (!user) { renderLanding(); showAuthView(); authRenderLogin(); return; }
+  if (!user) {
+    renderLanding();
+    if (!path || path === "#" || path === "#/" || path === "#/") { showLanding(); return; }
+    showAuthView(); authRenderLogin(); return;
+  }
 
   const key = handleHash();
   renderAppShell();

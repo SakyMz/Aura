@@ -208,6 +208,10 @@ const LEGAL_CONTENT = {
 
 5. Suas informações não são vendidas a terceiros.
 
-6. Você pode solicitar a exclusão dos seus dados a qualquer momento entrando em contato conosco.`
+6. Para validar o acesso, solicitamos uma foto legível de documento oficial com foto e rosto. A análise é manual e feita apenas pela administradora; a imagem fica em armazenamento privado e é apagada após a decisão.
+
+7. O documento é usado somente para a validação da conta. Não fazemos reconhecimento facial automatizado.
+
+8. Você pode solicitar a exclusão dos seus dados a qualquer momento entrando em contato conosco.`
   }
 };

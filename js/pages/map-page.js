@@ -24,9 +24,10 @@ async function renderMapPage() {
       </div>
       <div class="risk-legend-panel" id="map-legend">
         ${legendItem("#16a34a", "Baixo")}
-        ${legendItem("#eab308", "Atenção")}
+        ${legendItem("#ef4444", "Atenção")}
         ${legendItem("#f97316", "Moderado")}
-        ${legendItem("#dc2626", "Alto")}
+        ${legendItem("#b91c1c", "Alto")}
+        ${legendItem("#7f1d1d", "Crítico")}
       </div>
       <div class="map-side" id="map-side"></div>
     </div>`;

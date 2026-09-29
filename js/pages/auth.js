@@ -78,6 +78,16 @@ function authRenderSignup() {
           <button type="button" class="pw-toggle" data-toggle="su-pass2">${ICONS.eye}</button>
         </div>
       </div>
+      <div class="field verification-upload-field">
+        <label for="su-document">Documento com foto e rosto visível</label>
+        <p class="text-sm text-muted">Envie uma foto legível do RG ou documento oficial. A administradora da AURA fará a análise manual antes de liberar a conta. A imagem fica privada e será apagada após a decisão.</p>
+        <input id="su-document" type="file" accept="image/jpeg,image/png,image/webp" required />
+        <img id="su-document-preview" class="photo-preview hidden" alt="Prévia do documento" />
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="su-woman" required />
+        <span>Declaro que sou mulher e aceito a análise manual do meu documento para liberar o acesso.</span>
+      </label>
       <label class="checkbox-row">
         <input type="checkbox" id="su-terms" required />
         <span>Aceito os <a href="#" data-open="terms">termos de uso</a></span>
@@ -151,22 +161,45 @@ function bindAuthEvents(container) {
       const pass2 = document.getElementById("su-pass2").value;
       const terms = document.getElementById("su-terms").checked;
       const privacy = document.getElementById("su-privacy").checked;
+      const womanDeclaration = document.getElementById("su-woman").checked;
+      const verificationPhoto = document.getElementById("su-document").files[0];
       const btn = document.getElementById("su-submit");
 
       if (name.length < 2) { toast("Informe seu nome.", "warning"); return; }
       if (pass.length < 6) { toast("A senha deve ter pelo menos 6 caracteres.", "warning"); return; }
       if (pass !== pass2) { toast("As senhas não coincidem.", "warning"); return; }
+      if (!womanDeclaration) { toast("Confirme a declaração para solicitar a validação de acesso.", "warning"); return; }
       if (!terms || !privacy) { toast("Você precisa aceitar os termos e a política de privacidade.", "warning"); return; }
+      if (!isFirebaseLive()) { toast("O cadastro real será liberado quando a conexão Firebase estiver configurada.", "warning"); return; }
+      if (!verificationPhoto) { toast("Anexe uma foto do documento com o rosto visível.", "warning"); return; }
+      if (!/^image\/(jpeg|png|webp)$/.test(verificationPhoto.type) || verificationPhoto.size > 5 * 1024 * 1024) {
+        toast("Use uma imagem JPG, PNG ou WebP de até 5 MB.", "warning"); return;
+      }
 
       btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px"></div> Criando conta...';
       try {
-        await DataAccess.signUp(name, email, pass);
-        toast("Conta criada! Bem-vinda à AURA.", "success");
-        location.hash = "/";
+        await DataAccess.signUp(name, email, pass, verificationPhoto);
+        toast("Conta criada. Sua análise manual está pendente.", "success");
+        location.hash = "/validacao";
       } catch (err) {
         btn.disabled = false; btn.textContent = "Criar conta";
-        toast(friendlyAuthError(err), "error");
+        toast(err && err.code === "aura/verification-upload-failed"
+          ? "A conta foi criada, mas o documento não subiu. Entre e envie novamente na tela de validação."
+          : friendlyAuthError(err), "error");
       }
+    });
+    document.getElementById("su-document").addEventListener("change", e => {
+      const file = e.target.files[0];
+      const preview = document.getElementById("su-document-preview");
+      if (!file) { preview.classList.add("hidden"); preview.removeAttribute("src"); return; }
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+        e.target.value = "";
+        preview.classList.add("hidden");
+        toast("Use uma imagem JPG, PNG ou WebP de até 5 MB.", "warning");
+        return;
+      }
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("hidden");
     });
   }
 }

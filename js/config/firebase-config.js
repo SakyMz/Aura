@@ -9,17 +9,17 @@
 // 5) No Firestore e no Storage, cole as regras de segurança indicadas na
 //    seção "backend/rules" deste projeto.
 //
-// Enquanto as credenciais estiverem vazias, o aplicativo roda em MODO DEMO,
-// usando dados de demonstração claramente identificados no rodapé.
+// Configuração do app Web Aura no Firebase.
 // ============================================================================
 
 window.AURA_FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyBlfTvLiFeheHRAM4CXagyXCRtxQ1CU_1g",
+  authDomain: "aura-44ef6.firebaseapp.com",
+  projectId: "aura-44ef6",
+  storageBucket: "aura-44ef6.firebasestorage.app",
+  messagingSenderId: "782764547431",
+  appId: "1:782764547431:web:19d0b73baa5038beb5a3c2",
+  measurementId: "G-SSL5DV9XKB"
 };
 
 // Chave da Google Maps JavaScript API.

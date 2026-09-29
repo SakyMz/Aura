@@ -20,7 +20,7 @@ async function renderProfile() {
       <div class="email">${esc(u.email || "")}</div>
       <div class="profile-stats">
         <div class="profile-stat"><div class="num">${myCount}</div><div class="lbl">Relatos</div></div>
-        <div class="profile-stat"><div class="num" id="pf-role">—</div><div class="lbl">Acesso</div></div>
+        <div class="profile-stat"><div class="num" id="pf-verification">—</div><div class="lbl">Validação</div></div>
       </div>
     </div>
 
@@ -29,6 +29,7 @@ async function renderProfile() {
         <a class="settings-item" data-action="edit">${ICONS.edit}<span>Editar perfil</span><span class="chev">${ICONS.chevronDown}</span></a>
         <a class="settings-item" data-action="pass">${ICONS.lock}<span>Alterar senha</span><span class="chev">${ICONS.chevronDown}</span></a>
         <a class="settings-item" data-action="notif">${ICONS.bell}<span>Notificações</span><span class="chev">${ICONS.chevronDown}</span></a>
+        <a class="settings-item" data-action="emergency">${ICONS.alert}<span>Ajuda e emergência</span><span class="chev">${ICONS.chevronDown}</span></a>
         <span class="settings-item" data-action="privacy">${ICONS.shield}<span>Privacidade</span><span class="chev">${ICONS.chevronDown}</span></span>
         <span class="settings-item" data-action="terms">${ICONS.info}<span>Termos de uso</span><span class="chev">${ICONS.chevronDown}</span></span>
         <span class="settings-item" data-action="policy">${ICONS.mail}<span>Política de privacidade</span><span class="chev">${ICONS.chevronDown}</span></span>
@@ -36,7 +37,7 @@ async function renderProfile() {
       </div>
     </div>`;
 
-  document.getElementById("pf-role").textContent = (await DataAccess.isAdmin(u.id)) ? "Admin" : "Comum";
+  document.getElementById("pf-verification").textContent = u.verificationStatus === "approved" ? "Aprovada" : "Pendente";
 
   main.querySelectorAll(".settings-item").forEach(el => {
     el.addEventListener("click", () => {
@@ -57,6 +58,7 @@ function handleSetting(action) {
     case "edit": openEditProfile(); break;
     case "pass": openChangePassword(); break;
     case "notif": openNotificationsModal(); break;
+    case "emergency": openEmergencyModal(); break;
     case "privacy": openLegalModal("privacy"); break;
     case "terms": openLegalModal("terms"); break;
     case "policy": openLegalModal("privacy"); break;
@@ -71,22 +73,41 @@ function openEditProfile() {
     <div class="modal-body">
       <div class="field"><label>Nome</label><input id="ep-name" value="${esc(u.name || "")}" /></div>
       <div class="field"><label>Foto de perfil</label>
-        <input type="file" id="ep-photo" accept="image/*" style="display:none"/>
+        <input type="file" id="ep-photo" accept="image/jpeg,image/png,image/webp" style="display:none"/>
         <button type="button" class="btn btn-secondary" data-open-photo>${ICONS.camera} Escolher foto</button>
+        <span class="text-sm text-muted" id="ep-photo-name"></span>
       </div>
       <button class="btn btn-primary btn-block" id="ep-save">Salvar alterações</button>
     </div>`);
   const m = document.querySelector(".modal-overlay.open .modal");
   m.querySelector("[data-open-photo]").addEventListener("click", () => document.getElementById("ep-photo").click());
-  m.querySelector("#ep-save").addEventListener("click", async () => {
+  m.querySelector("#ep-photo").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 2 * 1024 * 1024) {
+      e.target.value = "";
+      toast("Use uma imagem JPG, PNG ou WebP de até 2 MB.", "warning");
+      return;
+    }
+    m.querySelector("#ep-photo-name").textContent = file.name;
+  });
+  m.querySelector("#ep-save").addEventListener("click", async e => {
     const name = document.getElementById("ep-name").value.trim();
     if (name.length < 2) { toast("Informe seu nome.", "warning"); return; }
+    const button = e.currentTarget;
+    button.disabled = true; button.textContent = "Salvando…";
     try {
+      await DataAccess.updateProfile({ name });
+      const photo = m.querySelector("#ep-photo").files[0];
+      if (photo) appUser.profileImage = await DataAccess.uploadProfilePhoto(photo);
       appUser.name = name;
       toast("Perfil atualizado.", "success");
       closeModal();
       renderProfile();
-    } catch (e) { toast("Erro ao atualizar perfil.", "error"); }
+    } catch (error) {
+      button.disabled = false; button.textContent = "Salvar alterações";
+      toast(error.message || "Erro ao atualizar perfil.", "error");
+    }
   });
 }
 
@@ -94,23 +115,30 @@ function openChangePassword() {
   openModal(`
     <div class="modal-head"><h3>Alterar senha</h3><button class="x" onclick="closeModal()">&times;</button></div>
     <div class="modal-body">
-      <p class="text-sm" style="color:var(--gray-500);margin-bottom:14px">A funcionalidade completa de troca de senha está disponível com o Firebase. No modo de demonstração, mostramos apenas a estrutura.</p>
+      <p class="text-sm" style="color:var(--gray-500);margin-bottom:14px">Confirme sua senha atual para cadastrar uma nova.</p>
+      <div class="field"><label>Senha atual</label><input type="password" id="cp-current" autocomplete="current-password" /></div>
       <div class="field"><label>Nova senha</label><input type="password" id="cp-pass" placeholder="Mínimo 6 caracteres" /></div>
       <div class="field"><label>Confirmar nova senha</label><input type="password" id="cp-pass2" placeholder="Repita a nova senha" /></div>
       <button class="btn btn-primary btn-block" id="cp-save">Salvar nova senha</button>
     </div>`);
   const m = document.querySelector(".modal-overlay.open .modal");
-  m.querySelector("#cp-save").addEventListener("click", () => {
+  m.querySelector("#cp-save").addEventListener("click", async e => {
+    const current = document.getElementById("cp-current").value;
     const p1 = document.getElementById("cp-pass").value;
     const p2 = document.getElementById("cp-pass2").value;
+    if (!current) { toast("Informe sua senha atual.", "warning"); return; }
     if (p1.length < 6) { toast("A senha deve ter pelo menos 6 caracteres.", "warning"); return; }
     if (p1 !== p2) { toast("As senhas não coincidem.", "warning"); return; }
-    if (isFirebaseLive()) {
-      toast("Atualize a senha usando o link de redefinição enviado por e-mail (recurso Firebase).", "info");
-    } else {
-      toast("Em modo demo, não alteramos a senha.", "info");
+    const button = e.currentTarget;
+    button.disabled = true; button.textContent = "Atualizando…";
+    try {
+      await DataAccess.changePassword(current, p1);
+      toast("Senha alterada com sucesso.", "success");
+      closeModal();
+    } catch (error) {
+      button.disabled = false; button.textContent = "Salvar nova senha";
+      toast(error.message || "Não foi possível alterar a senha.", "error");
     }
-    closeModal();
   });
 }
 

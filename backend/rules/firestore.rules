@@ -1,81 +1,106 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper: usuário autenticado
     function signedIn() {
       return request.auth != null;
     }
 
-    // Helper: usuário é administrador (campo role == 'admin' no doc do usuário)
     function isAdmin() {
-      return signedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // ==================================================================
-    // users
-    // - Cada usuária só pode ler/escrever o próprio documento.
-    // - Nunca expor dados de outras usuárias publicamente.
-    // - Admins podem gerenciar a coleção.
-    // ==================================================================
+    function isVerifiedWoman() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'approved';
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == userId
-          && request.resource.data.email == request.auth.token.email
-          && request.resource.data.keys().hasAll(['name','email','createdAt','updatedAt']);
-      allow update: if signedIn() && request.auth.uid == userId;
+
+      // Novo cadastro sempre começa pendente e não pode definir role/admin.
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.keys().hasOnly([
+          'name', 'email', 'profileImage', 'createdAt', 'updatedAt',
+          'verificationStatus', 'verificationDocumentPath',
+          'verificationSubmittedAt', 'emergencyContacts', 'selfDeclaredWoman'
+        ])
+        && request.resource.data.keys().hasAll([
+          'name', 'email', 'createdAt', 'updatedAt',
+          'verificationStatus', 'verificationDocumentPath', 'verificationSubmittedAt'
+        ])
+        && request.resource.data.verificationStatus == 'pending'
+        && request.resource.data.selfDeclaredWoman == true
+        && request.resource.data.verificationDocumentPath == 'verifications/' + userId + '/document'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2;
+
+      // A usuária pode editar somente seu perfil e reenviar documento após rejeição.
+      // Campos de análise e o papel de administradora são exclusivos do admin.
+      allow update: if isAdmin() || (
+        signedIn() && request.auth.uid == userId && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'updatedAt', 'profileImage', 'emergencyContacts'
+          ])
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'verificationDocumentPath', 'verificationSubmittedAt',
+              'verificationStatus', 'verificationReviewNote'
+            ])
+            && resource.data.verificationStatus in ['pending', 'rejected']
+            && request.resource.data.verificationStatus == 'pending'
+            && request.resource.data.verificationDocumentPath == 'verifications/' + userId + '/document'
+            && request.resource.data.verificationReviewNote == ''
+          )
+        )
+      );
       allow delete: if isAdmin();
     }
 
-    // ==================================================================
-    // reports
-    // - Qualquer usuária autenticada pode criar relato (validação dos dados).
-    // - Somente a própria autora lê os relatos "pending" (em análise).
-    // - Relatos publicados são legíveis por todas as usuárias autenticadas.
-    // - Nenhum usuário comum pode alterar/excluir relatos de outras.
-    // - Apenas admin altera status (aprovar/rejeitar/remover).
-    // ==================================================================
     match /reports/{reportId} {
-      // Leitura de relatos publicados para a comunidade
-      allow read: if signedIn()
-        && (resource.data.status == 'published' || resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAdmin() || (isVerifiedWoman() && (
+        resource.data.status == 'published' || resource.data.userId == request.auth.uid
+      ));
 
-      // Criação com validação dos campos obrigatórios
-      allow create: if signedIn()
+      allow create: if isVerifiedWoman()
         && request.resource.data.keys().hasAll([
-             'userId','category','description','latitude','longitude',
-             'riskLevel','date','createdAt','status','anonymous'
-           ])
+          'userId', 'category', 'description', 'latitude', 'longitude',
+          'riskLevel', 'date', 'createdAt', 'status', 'anonymous'
+        ])
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.latitude is number
         && request.resource.data.longitude is number
-        && request.resource.data.riskLevel in ['low','attention','moderate','high','critical'];
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 10
+        && request.resource.data.riskLevel in ['low', 'attention', 'moderate', 'high', 'critical'];
 
-      // Somente admin pode alterar status; autora pode editar antes da publicação
-      allow update: if signedIn()
-        && (
-          // admins alteram status (moderação)
-          (isAdmin())
-          ||
-          // autora pode editar conteúdo enquanto ainda estiver em análise
-          (request.resource.data.userId == request.auth.uid
-           && resource.data.status == 'pending'
-           && request.resource.data.status == 'pending')
-        );
-
+      allow update: if isAdmin() || (
+        isVerifiedWoman()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'category', 'description', 'latitude', 'longitude', 'riskLevel',
+          'date', 'imageUrl', 'anonymous'
+        ])
+      );
       allow delete: if isAdmin();
     }
 
-    // ==================================================================
-    // alerts
-    // - Visíveis para usuárias autenticadas.
-    // - Criados/geridos apenas por administradores.
-    // ==================================================================
     match /alerts/{alertId} {
-      allow read: if signedIn();
+      allow read: if isAdmin() || isVerifiedWoman();
       allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if settingId == 'emergency';
+      allow write: if isAdmin() && settingId == 'emergency';
     }
   }
 }

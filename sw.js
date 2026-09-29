@@ -4,7 +4,7 @@
 // parcial. Registrado apenas quando o app é servido via HTTP/HTTPS
 // (um navegador de arquivos file:// não registra service worker).
 // ============================================================================
-const CACHE = "aura-v1";
+const CACHE = "aura-v2";
 const CORE = [
   "./",
   "./index.html",
@@ -20,16 +20,17 @@ const CORE = [
   "./js/services/map.js",
   "./js/components/feedback.js",
   "./js/components/report-components.js",
+  "./js/components/emergency.js",
   "./js/router.js",
   "./js/pages/landing.js",
   "./js/pages/auth.js",
+  "./js/pages/verify.js",
   "./js/pages/home.js",
   "./js/pages/map-page.js",
   "./js/pages/report.js",
   "./js/pages/my-reports.js",
   "./js/pages/profile.js",
   "./js/pages/notifications.js",
-  "./js/pages/admin.js",
   "./js/app.js"
 ];
 

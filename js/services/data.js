@@ -10,15 +10,14 @@ let DB = {
   auth: null,
   db: null,
   storage: null,
+  authReady: null,
   googleMapsKey: window.AURA_GOOGLE_MAPS_KEY || ""
 };
 
-// Extrai o domínio do projectId para construir storageBucket, se vazio
+// Usa o bucket exatamente como fornecido pelo Firebase Console.
 function normalizedConfig() {
   const c = Object.assign({}, window.AURA_FIREBASE_CONFIG);
-  if (!c.storageBucket && c.projectId) {
-    c.storageBucket = c.projectId + ".appspot.com";
-  }
+  if (!c.storageBucket) throw new Error("Preencha storageBucket com o valor exato do Firebase Console.");
   return c;
 }
 
@@ -33,6 +32,7 @@ async function initFirebase() {
       DB.auth = window.firebase.auth(app);
       DB.db = window.firebase.firestore(app);
       DB.storage = window.firebase.storage(app);
+      DB.authReady = new Promise(resolve => DB.auth.onAuthStateChanged(resolve));
       DB.db.settings({ ignoreUndefinedProperties: true });
       DB.firebaseReady = true;
     } catch (e) {
@@ -52,7 +52,7 @@ function isFirebaseLive() {
 
 function getCurrentUid() {
   if (DB.auth && DB.auth.currentUser) return DB.auth.currentUser.uid;
-  return localStorage.getItem("aura_demo_uid");
+  return null;
 }
 
 // ============================================================================
@@ -63,14 +63,6 @@ function getCurrentUid() {
 function shortId() {
   return "demo_" + Math.random().toString(36).slice(2, 9);
 }
-
-const DEMO_USER = {
-  id: "demo_user_1",
-  name: "Marina",
-  email: "marina@demo.aura",
-  profileImage: "",
-  createdAt: new Date().toISOString()
-};
 
 function baseDemoReports() {
   const now = Date.now();
@@ -131,6 +123,7 @@ const DataAccess = {
   // --- Autenticação ---
   async getCurrentUser() {
     if (isFirebaseLive()) {
+      if (DB.authReady) await DB.authReady;
       const user = DB.auth.currentUser;
       if (!user) return null;
       // busca doc em users
@@ -139,15 +132,11 @@ const DataAccess = {
         if (snap.exists) {
           return { id: user.uid, email: user.email, ...snap.data() };
         }
-        return { id: user.uid, email: user.email, name: user.displayName || "" };
+        return { id: user.uid, email: user.email, name: user.displayName || "", verificationStatus: "pending" };
       } catch (e) {
         console.warn(e);
         return { id: user.uid, email: user.email };
       }
-    }
-    // Modo demo: só está "logada" se tiver feito login/cadastro na sessão
-    if (localStorage.getItem("aura_demo_uid")) {
-      return Object.assign({}, DEMO_USER);
     }
     return null;
   },
@@ -157,43 +146,105 @@ const DataAccess = {
       await DB.auth.signInWithEmailAndPassword(email, password);
       return DB.auth.currentUser;
     }
-    if (email && password) {
-      localStorage.setItem("aura_demo_uid", "demo_user_1");
-      DEMO_USER.email = email;
-      return Object.assign({}, DEMO_USER);
-    }
-    throw new Error("Credenciais inválidas");
+    throw new Error("A autenticação ainda não está configurada. A conta real será ativada quando o Firebase estiver conectado.");
   },
 
-  async signUp(name, email, password) {
-    if (isFirebaseLive()) {
-      const cred = await DB.auth.createUserWithEmailAndPassword(email, password);
-      const uid = cred.user.uid;
-      const now = new Date().toISOString();
+  async signUp(name, email, password, verificationPhoto) {
+    if (!isFirebaseLive()) throw new Error("O cadastro real será liberado assim que a conexão com Firebase estiver configurada.");
+    if (!verificationPhoto) throw new Error("Anexe uma foto legível do documento com o rosto visível.");
+
+    const cred = await DB.auth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    const now = new Date().toISOString();
+    const path = "verifications/" + uid + "/document";
+    try {
       await cred.user.updateProfile({ displayName: name });
       await DB.db.collection("users").doc(uid).set({
-        name, email, profileImage: "", createdAt: now, updatedAt: now
+        name, email, profileImage: "", createdAt: now, updatedAt: now,
+        verificationStatus: "pending", verificationDocumentPath: path,
+        verificationSubmittedAt: now, emergencyContacts: [], selfDeclaredWoman: true
       });
-      return cred.user;
+    } catch (error) {
+      try { await cred.user.delete(); } catch (cleanupError) { console.warn("Não foi possível remover a conta incompleta.", cleanupError); }
+      throw error;
     }
-    DEMO_USER.name = name; DEMO_USER.email = email;
-    localStorage.setItem("aura_demo_uid", "demo_user_1");
-    return Object.assign({}, DEMO_USER);
+    try {
+      await DB.storage.ref(path).put(verificationPhoto);
+    } catch (error) {
+      error.code = error.code || "aura/verification-upload-failed";
+      throw error;
+    }
+    return { id: uid, email, name, verificationStatus: "pending" };
   },
 
   async signOut() {
-    if (isFirebaseLive()) {
-      await DB.auth.signOut();
-    } else {
-      localStorage.removeItem("aura_demo_uid");
-    }
+    if (isFirebaseLive() && DB.auth.currentUser) await DB.auth.signOut();
   },
 
   async sendPasswordReset(email) {
-    if (isFirebaseLive()) {
-      await DB.auth.sendPasswordResetEmail(email);
+    if (!isFirebaseLive()) throw new Error("A recuperação de senha será ativada quando o Firebase estiver conectado.");
+    await DB.auth.sendPasswordResetEmail(email);
+  },
+
+  async uploadVerificationDocument(file) {
+    if (!isFirebaseLive() || !DB.auth.currentUser) throw new Error("Entre na sua conta para enviar o documento.");
+    const uid = DB.auth.currentUser.uid;
+    const snap = await DB.db.collection("users").doc(uid).get();
+    if (!snap.exists || !["pending", "rejected"].includes(snap.data().verificationStatus)) {
+      throw new Error("Não é possível substituir o documento neste estado da análise.");
     }
-    // em demo apenas simula sucesso
+    const path = "verifications/" + uid + "/document";
+    await DB.storage.ref(path).put(file);
+    await DB.db.collection("users").doc(uid).update({
+      verificationStatus: "pending",
+      verificationDocumentPath: path,
+      verificationSubmittedAt: new Date().toISOString(),
+      verificationReviewNote: "",
+      updatedAt: new Date().toISOString()
+    });
+  },
+
+  async updateProfile(data) {
+    if (!isFirebaseLive() || !DB.auth.currentUser) throw new Error("Entre na sua conta para editar o perfil.");
+    await DB.db.collection("users").doc(DB.auth.currentUser.uid).update({
+      name: data.name,
+      updatedAt: new Date().toISOString()
+    });
+    await DB.auth.currentUser.updateProfile({ displayName: data.name });
+    return this.getCurrentUser();
+  },
+
+  async uploadProfilePhoto(file) {
+    if (!isFirebaseLive() || !DB.auth.currentUser) throw new Error("Entre na sua conta para atualizar a foto.");
+    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 2 * 1024 * 1024) {
+      throw new Error("Use uma imagem JPG, PNG ou WebP de até 2 MB.");
+    }
+    const path = "profiles/" + DB.auth.currentUser.uid + "/profile";
+    const ref = DB.storage.ref(path);
+    await ref.put(file);
+    const profileImage = await ref.getDownloadURL();
+    await DB.db.collection("users").doc(DB.auth.currentUser.uid).update({
+      profileImage,
+      updatedAt: new Date().toISOString()
+    });
+    await DB.auth.currentUser.updateProfile({ photoURL: profileImage });
+    return profileImage;
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    if (!isFirebaseLive() || !DB.auth.currentUser) throw new Error("Entre na sua conta para alterar a senha.");
+    const user = DB.auth.currentUser;
+    const credential = window.firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPassword);
+  },
+
+  async publicEmergencyContacts() {
+    if (isFirebaseLive()) {
+      const snap = await DB.db.collection("settings").doc("emergency").get();
+      if (snap.exists && Array.isArray(snap.data().contacts)) return snap.data().contacts;
+    }
+    return EMERGENCY_CONTACTS;
   },
 
   // --- Relatos ---
@@ -266,7 +317,7 @@ const DataAccess = {
   async uploadImage(file) {
     if (isFirebaseLive() && DB.storage) {
       const uid = DB.auth.currentUser ? DB.auth.currentUser.uid : getCurrentUid();
-      const path = "reports/" + uid + "/" + Date.now() + "_" + file.name;
+      const path = "reports/" + uid + "/" + Date.now() + "_" + String(file.name || "foto").replace(/[^a-zA-Z0-9._-]/g, "_");
       const ref = DB.storage.ref(path);
       await ref.put(file);
       return await ref.getDownloadURL();
@@ -276,83 +327,6 @@ const DataAccess = {
     return null;
   },
 
-  // --- Admin ---
-  async isAdmin(uid) {
-    // Em demo, o usuário demo é admin.
-    if (!isFirebaseLive()) return true;
-    try {
-      const snap = await DB.db.collection("users").doc(uid).get();
-      return !!(snap.exists && snap.data().role === "admin");
-    } catch (e) {
-      console.warn(e);
-      return false;
-    }
-  },
-
-  async adminStats() {
-    if (isFirebaseLive()) {
-      const users = await DB.db.collection("users").get();
-      const reports = await DB.db.collection("reports").get();
-      let pending = 0, published = 0;
-      const cats = {};
-      reports.forEach(d => {
-        const st = d.data().status;
-        if (st === "pending") pending++;
-        if (st === "published") published++;
-        const c = d.data().category || "outro";
-        cats[c] = (cats[c] || 0) + 1;
-      });
-      return {
-        totalUsers: users.size,
-        totalReports: reports.size,
-        pending, published,
-        categories: cats
-      };
-    }
-    const reports = baseDemoReports();
-    return {
-      totalUsers: 128,
-      totalReports: reports.length,
-      pending: 7,
-      published: reports.length,
-      categories: {
-        "assédio": 12, "roubo": 9, "abordagem": 8, "iluminação": 6,
-        "trânsito": 4, "violência": 3, "outro": 2
-      }
-    };
-  },
-
-  async adminListPending() {
-    if (isFirebaseLive()) {
-      const snap = await DB.db.collection("reports")
-        .where("status", "==", "pending").limit(100).get();
-      const out = [];
-      snap.forEach(d => out.push(Object.assign({ id: d.id }, d.data())));
-      return out;
-    }
-    // Demo: gera alguns relatos pendentes
-    const now = Date.now();
-    return [
-      {
-        id: "pend_1", userId: "u_x", category: "assédio",
-        description: "[DEMONSTRAÇÃO] Assédio relatado no ponto de ônibus perto da perfumaria.",
-        latitude: -23.5511, longitude: -46.6341, riskLevel: "high",
-        createdAt: new Date(now - 1e4).toISOString(), status: "pending", anonymous: true
-      },
-      {
-        id: "pend_2", userId: "u_y", category: "iluminação",
-        description: "[DEMONSTRAÇÃO] Lâmpadas queimadas na viela de acesso ao condomínio.",
-        latitude: -23.5560, longitude: -46.6380, riskLevel: "attention",
-        createdAt: new Date(now - 2e4).toISOString(), status: "pending", anonymous: true
-      }
-    ];
-  },
-
-  async adminSetStatus(reportId, status) {
-    if (isFirebaseLive()) {
-      await DB.db.collection("reports").doc(reportId).update({ status });
-    }
-  }
 };
 
 // Mapa da chave do Google Maps (exposto para o módulo de mapas)

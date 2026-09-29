@@ -1,33 +1,52 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Helpers
     function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return signedIn() &&
-        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    function isVerifiedOwner(uid) {
+      return signedIn() && request.auth.uid == uid
+        && firestore.exists(/databases/(default)/documents/users/$(uid))
+        && firestore.get(/databases/(default)/documents/users/$(uid)).data.verificationStatus == 'approved';
+    }
+    function validImage(maxBytes) {
+      return request.resource != null
+        && request.resource.size <= maxBytes
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
 
-    // Uploads de relatos: usuária autenticada escreve em seu próprio diretório
+    // Documentos enviados na validação: envio apenas pela própria conta pendente;
+    // leitura e exclusão somente pela administradora.
+    match /verifications/{userId}/document {
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && firestore.exists(/databases/(default)/documents/users/$(userId))
+        && firestore.get(/databases/(default)/documents/users/$(userId)).data.verificationStatus in ['pending', 'rejected']
+        && validImage(5 * 1024 * 1024);
+      allow read, delete: if isAdmin();
+    }
+
     match /reports/{userId}/{fileName} {
-      allow read: if signedIn();
-      allow write: if signedIn()
+      allow read: if isAdmin() || isVerifiedOwner(userId);
+      allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.size < 4 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isVerifiedOwner(userId)
+        && validImage(4 * 1024 * 1024);
+      allow delete: if isAdmin() || isVerifiedOwner(userId);
     }
 
-    // Fotos de perfil: própria usuária
     match /profiles/{userId}/{fileName} {
-      allow read: if signedIn();
-      allow write: if signedIn()
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.size < 2 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isVerifiedOwner(userId)
+        && validImage(2 * 1024 * 1024);
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == userId);
     }
 
-    // Admin pode gerir tudo
     match /{allPaths=**} {
       allow read, write: if isAdmin();
     }

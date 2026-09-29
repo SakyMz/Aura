@@ -11,6 +11,7 @@ const AuraMap = {
   mapContainer: null,
   markers: [],
   userMarker: null,
+  selectionMarker: null,
   engine: null, // "google" | "leaflet"
 
   async init(containerEl, opts) {
@@ -41,6 +42,7 @@ const AuraMap = {
   },
 
   setCenter(lat, lng, zoom) {
+    if (!this.currentMap || !this.engine) return;
     if (this.engine === "google") {
       this.currentMap.setCenter({ lat, lng });
       if (zoom) this.currentMap.setZoom(zoom);
@@ -92,6 +94,36 @@ const AuraMap = {
     return m;
   },
 
+  onMapClick(handler) {
+    if (!this.currentMap || !this.engine) return;
+    if (this.engine === "google") {
+      this.currentMap.addListener("click", event => handler({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
+    } else if (this.engine === "leaflet") {
+      this.currentMap.on("click", event => handler({ lat: event.latlng.lat, lng: event.latlng.lng }));
+    }
+  },
+
+  setSelectionMarker(lat, lng, level) {
+    if (!this.currentMap || !this.engine) return;
+    if (this.selectionMarker) {
+      if (this.engine === "google") this.selectionMarker.setMap(null);
+      else this.currentMap.removeLayer(this.selectionMarker);
+    }
+    const color = riskColor(level || "attention");
+    if (this.engine === "google") {
+      this.selectionMarker = new google.maps.Marker({
+        position: { lat, lng }, map: this.currentMap, title: "Local selecionado", icon: googleMarker(color)
+      });
+    } else {
+      const icon = L.divIcon({
+        className: "",
+        html: '<div class="aura-marker" style="--mc:' + color + '">' + ICONS.pinSolid + '</div>',
+        iconSize: [30, 30], iconAnchor: [15, 30]
+      });
+      this.selectionMarker = L.marker([lat, lng], { icon }).addTo(this.currentMap);
+    }
+  },
+
   removeUserMarker() {
     if (!this.userMarker) return;
     if (this.engine === "google") this.userMarker.setMap(null);
@@ -101,6 +133,11 @@ const AuraMap = {
 
   clearMarkers() {
     this.removeUserMarker();
+    if (this.selectionMarker) {
+      if (this.engine === "google") this.selectionMarker.setMap(null);
+      else this.currentMap.removeLayer(this.selectionMarker);
+      this.selectionMarker = null;
+    }
     this.markers.forEach(m => {
       if (this.engine === "google") m.setMap(null);
       else this.currentMap.removeLayer(m);
@@ -124,10 +161,10 @@ const AuraMap = {
 function riskColor(level) {
   switch ((level || "attention")) {
     case "low": return "#16a34a";
-    case "attention": return "#eab308";
+    case "attention": return "#ef4444";
     case "moderate": return "#f97316";
-    case "high": return "#dc2626";
-    case "critical": return "#991b1b";
+    case "high": return "#b91c1c";
+    case "critical": return "#7f1d1d";
     default: return "#8b5cf6";
   }
 }

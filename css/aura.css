@@ -23,14 +23,14 @@
   /* Níveis de risco */
   --risk-low:      #16a34a;  /* verde  */
   --risk-low-bg:   #dcfce7;
-  --risk-attn:     #eab308;  /* amarelo */
-  --risk-attn-bg:  #fef9c3;
+  --risk-attn:     #ef4444;  /* vermelho */
+  --risk-attn-bg:  #fee2e2;
   --risk-mod:      #f97316;  /* laranja */
   --risk-mod-bg:   #ffedd5;
-  --risk-high:     #dc2626;  /* vermelho */
-  --risk-high-bg:  #fee2e2;
-  --risk-critical: #991b1b;  /* vermelho escuro */
-  --risk-crit-bg:  #fecaca;
+  --risk-high:     #b91c1c;  /* vermelho escuro */
+  --risk-high-bg:  #fecaca;
+  --risk-critical: #7f1d1d;  /* vermelho crítico */
+  --risk-crit-bg:  #fca5a5;
 
   /* Neutros */
   --gray-900: #18181b;
@@ -203,14 +203,40 @@ img, svg { display: block; max-width: 100%; }
 
 .risk-low      { color: #166534; background: var(--risk-low-bg); }
 .risk-low .risk-dot { background: var(--risk-low); }
-.risk-attn     { color: #854d0e; background: var(--risk-attn-bg); }
-.risk-attn .risk-dot { background: #ca8a04; }
+.risk-attn     { color: #991b1b; background: var(--risk-attn-bg); }
+.risk-attn .risk-dot { background: var(--risk-attn); }
 .risk-mod      { color: #9a3412; background: var(--risk-mod-bg); }
 .risk-mod .risk-dot { background: var(--risk-mod); }
 .risk-high     { color: #991b1b; background: var(--risk-high-bg); }
 .risk-high .risk-dot { background: var(--risk-high); }
 .risk-critical { color: #7f1d1d; background: var(--risk-crit-bg); }
 .risk-critical .risk-dot { background: var(--risk-critical); }
+
+/* Validação manual e contatos de emergência */
+.verify-card { width:min(calc(100% - 32px), 520px); margin:8vh auto; padding:32px; border:1px solid var(--gray-100); border-radius:24px; background:#fff; box-shadow:var(--shadow-md); text-align:center; }
+.verify-card h1 { margin:24px 0 10px; color:var(--aura-900); font-size:26px; }
+.verify-card > p { color:var(--gray-600); line-height:1.65; }
+.verify-card .brand { justify-content:center; margin-top:20px; }
+.verify-status-icon { width:60px; height:60px; margin:28px auto 0; display:grid; place-items:center; border-radius:50%; background:var(--aura-100); color:var(--aura-700); }
+.verify-status-icon svg { width:30px; height:30px; }
+.verify-pending-note { display:flex; gap:10px; align-items:flex-start; margin:22px 0; padding:14px; border-radius:14px; background:var(--aura-50); color:var(--aura-800); text-align:left; font-size:13px; line-height:1.5; }
+.verify-pending-note svg { width:20px; flex:none; }
+.verification-upload-field .text-sm { margin:-6px 0 10px; line-height:1.5; }
+.emergency-list { display:grid; gap:10px; margin-top:16px; }
+.emergency-contact { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:14px 16px; border:1px solid var(--gray-100); border-radius:14px; text-decoration:none; color:var(--gray-800); }
+.emergency-contact strong,.emergency-contact small { display:block; }
+.emergency-contact small { margin-top:3px; color:var(--gray-500); }
+.emergency-call { padding:8px 14px; border-radius:999px; background:#fee2e2; color:#991b1b; font-weight:700; }
+.emergency-note { margin-top:18px; }
+.emergency-trigger { margin-left:8px; }
+.report-location-map { height:230px; overflow:hidden; border:1px solid var(--gray-200); border-radius:14px; background:var(--gray-100); }
+.risk-legend-panel { flex-wrap:wrap; }
+@media (max-width:560px) {
+  .verify-card { margin:24px auto; padding:26px 20px; }
+  .topbar-right .emergency-trigger { padding:9px 12px; font-size:12px; }
+  .risk-legend-panel { gap:8px 10px !important; }
+  .risk-legend-panel .rl { font-size:11px !important; }
+}
 
 /* ==========================================================================
    Loading / spinner

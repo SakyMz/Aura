@@ -14,6 +14,7 @@ const RISK_LEVELS = {
 // para os níveis do sistema de risco.
 const FORM_RISK_TO_SYSTEM = {
   "baixo": "low",
+  "atencao": "attention",
   "medio": "moderate",
   "alto": "high",
   "critico": "critical"
@@ -65,3 +66,8 @@ function riskOfForm(value) {
   const k = FORM_RISK_TO_SYSTEM[(value || "").toLowerCase()];
   return k || "attention";
 }
+
+const EMERGENCY_CONTACTS = [
+  { name: "Polícia Militar", number: "190" },
+  { name: "Central de Atendimento à Mulher", number: "180" }
+];

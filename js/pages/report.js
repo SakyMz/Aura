@@ -41,6 +41,8 @@ async function renderReportPage() {
         <label>Localização</label>
         <div class="loc-picker" id="loc-picker">
           <button type="button" class="btn btn-secondary" id="use-my-loc">${ICONS.loc} Usar minha localização atual</button>
+          <p class="text-sm text-muted" style="margin-top:10px">Ou toque no mapa para marcar o local do ocorrido.</p>
+          <div id="report-location-map" class="report-location-map" aria-label="Mapa para selecionar o local do relato"></div>
           <div class="loc-info mt-2" id="loc-info">
             ${ICONS.pin} <span>Nenhuma localização selecionada</span>
           </div>
@@ -51,9 +53,10 @@ async function renderReportPage() {
         <label>Nível de atenção</label>
         <div class="seg-control" id="risk-seg">
           ${riskSegment("baixo", "Baixo", "#16a34a", "low")}
-          ${riskSegment("medio", "Médio", "#eab308", "moderate")}
-          ${riskSegment("alto", "Alto", "#f97316", "high")}
-          ${riskSegment("critico", "Crítico", "#dc2626", "critical")}
+          ${riskSegment("atencao", "Atenção", "#ef4444", "attention")}
+          ${riskSegment("medio", "Moderado", "#f97316", "moderate")}
+          ${riskSegment("alto", "Alto", "#b91c1c", "high")}
+          ${riskSegment("critico", "Crítico", "#7f1d1d", "critical")}
         </div>
       </div>
 
@@ -106,16 +109,27 @@ async function renderReportPage() {
       reportState.risk = riskOfForm(b.getAttribute("data-risk"));
     });
   });
-  document.querySelector('#risk-seg .seg-btn[data-risk="medio"]').classList.add("selected");
+  document.querySelector('#risk-seg .seg-btn[data-risk="atencao"]').classList.add("selected");
+  document.querySelectorAll("#risk-seg .seg-btn").forEach(button => button.addEventListener("click", () => {
+    if (reportState.lat != null && reportState.lng != null) {
+      AuraMap.setSelectionMarker(reportState.lat, reportState.lng, reportState.risk);
+    }
+  }));
+
+  try {
+    const picker = document.getElementById("report-location-map");
+    await AuraMap.init(picker, { center: { lat: -23.55, lng: -46.6333 }, zoom: 12 });
+    AuraMap.onMapClick(point => setReportLocation(point.lat, point.lng, "Local marcado no mapa"));
+  } catch (error) {
+    document.getElementById("report-location-map").innerHTML = '<div class="map-state"><p>O mapa não carregou. Você ainda pode usar sua localização atual.</p></div>';
+  }
 
   // localização
   document.getElementById("use-my-loc").addEventListener("click", async () => {
     try {
       const p = await getUserLocation();
-      reportState.lat = p.lat; reportState.lng = p.lng;
-      const info = document.querySelector("#loc-info span");
-      info.textContent = "Localização selecionada automaticamente";
-      document.getElementById("loc-picker").classList.add("has-loc");
+      setReportLocation(p.lat, p.lng, "Sua localização atual");
+      AuraMap.setCenter(p.lat, p.lng, 15);
       toast("Localização atual usada.", "success");
     } catch (e) {
       toast("Não foi possível obter sua localização.", "error");
@@ -157,6 +171,14 @@ async function renderReportPage() {
   document.getElementById("report-form").addEventListener("submit", submitReport);
 }
 
+function setReportLocation(lat, lng, label) {
+  reportState.lat = Number(lat);
+  reportState.lng = Number(lng);
+  document.querySelector("#loc-info span").textContent = label + " · " + reportState.lat.toFixed(5) + ", " + reportState.lng.toFixed(5);
+  document.getElementById("loc-picker").classList.add("has-loc");
+  AuraMap.setSelectionMarker(reportState.lat, reportState.lng, reportState.risk);
+}
+
 function riskSegment(id, label, color, sysKey) {
   return '<button type="button" class="seg-btn" data-risk="' + id + '">' +
     '<span class="dot" style="background:' + color + '"></span>' + label + '</button>';
@@ -174,7 +196,7 @@ async function submitReport(e) {
   const btn = document.getElementById("r-submit");
 
   if (!reportState.category) { toast("Selecione uma categoria.", "warning"); return; }
-  if (!reportState.lat || !reportState.lng) { toast("Selecione a localização (use sua localização atual).", "warning"); return; }
+  if (reportState.lat == null || reportState.lng == null) { toast("Selecione a localização (use sua localização atual).", "warning"); return; }
   if (desc.length < 10) { toast("Descreva o ocorrido com pelo menos 10 caracteres.", "warning"); return; }
 
   btn.disabled = true;
@@ -183,10 +205,8 @@ async function submitReport(e) {
     let imageUrl = "";
     if (reportState.image) {
       toast("Enviando imagem...", "info", 2000);
-      imageUrl = await DataAccess.uploadImage(reportState.image);
-      if (!imageUrl && isFirebaseLive()) {
-        toast("Não foi possível enviar a imagem. Enviando relato sem foto.", "warning");
-      }
+      try { imageUrl = await DataAccess.uploadImage(reportState.image); }
+      catch (imageError) { toast("A foto não foi enviada; o relato será enviado sem imagem.", "warning"); }
     }
     const date = document.getElementById("r-date").value
       ? new Date(document.getElementById("r-date").value).toISOString()
