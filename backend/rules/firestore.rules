@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: usuário autenticado
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: usuário é administrador (campo role == 'admin' no doc do usuário)
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ==================================================================
+    // users
+    // - Cada usuária só pode ler/escrever o próprio documento.
+    // - Nunca expor dados de outras usuárias publicamente.
+    // - Admins podem gerenciar a coleção.
+    // ==================================================================
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && request.auth.uid == userId
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.keys().hasAll(['name','email','createdAt','updatedAt']);
+      allow update: if signedIn() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // ==================================================================
+    // reports
+    // - Qualquer usuária autenticada pode criar relato (validação dos dados).
+    // - Somente a própria autora lê os relatos "pending" (em análise).
+    // - Relatos publicados são legíveis por todas as usuárias autenticadas.
+    // - Nenhum usuário comum pode alterar/excluir relatos de outras.
+    // - Apenas admin altera status (aprovar/rejeitar/remover).
+    // ==================================================================
+    match /reports/{reportId} {
+      // Leitura de relatos publicados para a comunidade
+      allow read: if signedIn()
+        && (resource.data.status == 'published' || resource.data.userId == request.auth.uid || isAdmin());
+
+      // Criação com validação dos campos obrigatórios
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+             'userId','category','description','latitude','longitude',
+             'riskLevel','date','createdAt','status','anonymous'
+           ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.riskLevel in ['low','attention','moderate','high','critical'];
+
+      // Somente admin pode alterar status; autora pode editar antes da publicação
+      allow update: if signedIn()
+        && (
+          // admins alteram status (moderação)
+          (isAdmin())
+          ||
+          // autora pode editar conteúdo enquanto ainda estiver em análise
+          (request.resource.data.userId == request.auth.uid
+           && resource.data.status == 'pending'
+           && request.resource.data.status == 'pending')
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ==================================================================
+    // alerts
+    // - Visíveis para usuárias autenticadas.
+    // - Criados/geridos apenas por administradores.
+    // ==================================================================
+    match /alerts/{alertId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
