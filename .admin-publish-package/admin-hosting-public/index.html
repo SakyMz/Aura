@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AURA — Área privada</title>
+  <link rel="stylesheet" href="/css/aura.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/pages.css" />
+  <style>
+    body { background:#f7f5fc; }
+    .private-wrap { width:min(100% - 32px, 1040px); margin:32px auto 80px; }
+    .private-head { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:22px; }
+    .private-card { background:#fff; border:1px solid #eeeaf6; border-radius:18px; padding:20px; margin:14px 0; box-shadow:0 6px 24px #2819500b; }
+    .private-card h2 { color:#39206c; margin:0 0 8px; }
+    .private-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0; }
+    .private-tabs button { border:1px solid #e7e0f3; border-radius:99px; padding:10px 16px; background:#fff; color:#50358b; cursor:pointer; }
+    .private-tabs button.active { background:#6a3fd0; color:#fff; }
+    .private-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,360px); gap:20px; align-items:start; }
+    .private-id { width:100%; max-height:360px; object-fit:contain; background:#f4f1f9; border-radius:12px; }
+    .private-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .contact-row { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin:10px 0; }
+    .private-message { padding:14px; border-radius:12px; background:#f2edfc; color:#50358b; }
+    .private-error { background:#fff1f2; color:#9f1239; }
+    @media(max-width:700px) { .private-row { grid-template-columns:1fr; } .contact-row { grid-template-columns:1fr; } .private-head { align-items:flex-start; flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <div class="toast-container"></div>
+  <main class="private-wrap">
+    <header class="private-head">
+      <div><span class="brand"><span class="brand-mark">✦</span><span class="brand-name">AURA · privado</span></span><p>Painel restrito à administradora.</p></div>
+      <button id="private-logout" class="btn btn-secondary hidden">Sair</button>
+    </header>
+    <div id="private-root" class="private-card">Conectando ao Firebase…</div>
+  </main>
+  <script src="/js/config/firebase-config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="/js/constants.js"></script>
+  <script src="/js/services/data.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>

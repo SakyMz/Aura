@@ -1,0 +1,23 @@
+{
+  "firestore": {
+    "rules": "backend/rules/firestore.rules"
+  },
+  "storage": {
+    "rules": "backend/storage/storage.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      ".gitignore",
+      "**/.git/**",
+      "**/.*",
+      "**/node_modules/**",
+      "private-admin/**",
+      "backend/**",
+      "README.md",
+      "aura.exp.zip"
+    ]
+  }
+}

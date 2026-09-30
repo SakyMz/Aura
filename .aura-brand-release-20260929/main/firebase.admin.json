@@ -1,0 +1,34 @@
+{
+  "hosting": {
+    "ignore": [
+      "firebase.admin.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "headers": [
+          {
+            "value": "noindex, nofollow, noarchive",
+            "key": "X-Robots-Tag"
+          },
+          {
+            "value": "no-store",
+            "key": "Cache-Control"
+          },
+          {
+            "value": "DENY",
+            "key": "X-Frame-Options"
+          },
+          {
+            "value": "nosniff",
+            "key": "X-Content-Type-Options"
+          }
+        ],
+        "source": "**"
+      }
+    ],
+    "public": "admin-hosting-public",
+    "site": "aura-44ef6-admin"
+  }
+}
